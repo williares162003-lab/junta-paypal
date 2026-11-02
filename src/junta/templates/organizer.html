@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ group.name }} · Organizer{% endblock %}
+{% block tag %}Organizer view{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">{{ group.name }}</p>
+    <h1>Round {{ s.round }} of {{ total_rounds }}</h1>
+    <p class="muted">This round's pot goes to <strong>{{ s.recipient }}</strong>.
+      Everyone contributes {{ group.contribution_cents | money }} {{ s.currency }}.</p>
+  </div>
+  <div class="pot">
+    <span class="muted">Pot</span>
+    <strong>{{ s.captured_cents | money }}</strong>
+    <span class="muted">of {{ s.expected_cents | money }} {{ s.currency }}</span>
+    <div class="bar"><span style="width: {{ (100 * s.captured_cents / s.expected_cents) | round | int }}%"></span></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Contributions</h2>
+  <ul class="list">
+    {% for c in s.contributions %}
+    <li>
+      <span class="who">{{ c.name }}</span>
+      {% if c.status == 'CAPTURED' %}<span class="pill ok">Paid</span>
+      {% elif c.status == 'ORDER_CREATED' %}<span class="pill wait">Paying…</span>
+      {% else %}<span class="pill due">Not paid</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted small">Member pages:
+    {% for m in members %}<a href="{{ url_for('member', member_id=m.id) }}">{{ m.name }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
+  </p>
+</section>
+
+<section class="card">
+  <h2>Release the pot</h2>
+  {% if payout %}
+    <p>Sent {{ payout.amount_cents | money }} {{ s.currency }} to {{ s.recipient }} through PayPal Payouts.
+       Status: <span class="pill {{ 'ok' if payout.status == 'SUCCESS' else 'wait' }}">{{ payout.status }}</span></p>
+    <p class="muted small">PayPal batch {{ payout.paypal_batch_id or 'pending' }}</p>
+    {% if payout.status != 'SUCCESS' %}
+    <form method="post" action="{{ url_for('refresh', group_id=group.id) }}"><button class="ghost">Check status</button></form>
+    {% elif s.round < total_rounds %}
+    <form method="post" action="{{ url_for('next_round', group_id=group.id) }}" class="row">
+      <input name="pin" type="password" inputmode="numeric" placeholder="Organizer PIN" required>
+      <button>Open round {{ s.round + 1 }}</button>
+    </form>
+    {% else %}<p><strong>The junta is complete.</strong> Everyone had their turn.</p>{% endif %}
+  {% elif s.missing %}
+    <p class="locked">Locked until everyone pays. Waiting for: <strong>{{ s.missing | join(', ') }}</strong>.</p>
+  {% else %}
+    <p>Everyone paid. Release {{ s.captured_cents | money }} {{ s.currency }} to <strong>{{ s.recipient }}</strong>?</p>
+    <form method="post" action="{{ url_for('release', group_id=group.id) }}" class="row">
+      <input name="pin" type="password" inputmode="numeric" placeholder="Organizer PIN" required>
+      <button>Release pot</button>
+    </form>
+  {% endif %}
+</section>
+
+{% with me = none, ai_on = true %}{% include "_chat.html" %}{% endwith %}
+
+<section class="card">
+  <h2>History</h2>
+  <ol class="history">
+    {% for h in history %}<li><span class="muted small">{{ h.at }}</span> {{ h.text }}</li>{% endfor %}
+  </ol>
+</section>
+{% endblock %}

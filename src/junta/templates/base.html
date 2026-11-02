@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Junta{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="sandbox">Sandbox prototype · PayPal test accounts only · no real money</div>
+  <header class="top">
+    <a class="brand" href="{{ url_for('home') }}"><span class="logo">J</span> Junta</a>
+    <span class="tag">{% block tag %}{% endblock %}</span>
+  </header>
+  <main class="wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for kind, text in messages %}<div class="flash {{ kind }}">{{ text }}</div>{% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

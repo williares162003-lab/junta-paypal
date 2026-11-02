@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ m.name }} · {{ group.name }}{% endblock %}
+{% block tag %}{{ m.name }}{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">{{ group.name }}</p>
+    <h1>Hi {{ m.name }}</h1>
+    <p class="muted">Round {{ s.round }}: the pot goes to <strong>{{ s.recipient }}</strong>.
+      Your turn to receive is round <strong>{{ m.turn }}</strong>.</p>
+  </div>
+  <div class="pot">
+    <span class="muted">Your contribution</span>
+    <strong>{{ mine.amount_cents | money }}</strong>
+    <span class="muted">{{ s.currency }}</span>
+  </div>
+</section>
+
+<section class="card">
+  {% if mine.status == 'CAPTURED' %}
+    <p class="done">✓ You paid this round. PayPal confirmed it.</p>
+  {% else %}
+    <p>Pay your share with PayPal. You approve the payment yourself on PayPal and come back here.</p>
+    <form method="post" action="{{ url_for('pay', contribution_id=mine.id) }}">
+      <button class="paypal">Pay {{ mine.amount_cents | money }} with PayPal</button>
+    </form>
+  {% endif %}
+  <p class="muted small">{{ s.contributions | selectattr('status', 'equalto', 'CAPTURED') | list | length }}
+    of {{ s.contributions | length }} members paid. The pot is released only when everyone has paid.</p>
+</section>
+
+{% with me = m %}{% include "_chat.html" %}{% endwith %}
+
+<section class="card">
+  <h2>Group history</h2>
+  <ol class="history">
+    {% for h in history %}<li><span class="muted small">{{ h.at }}</span> {{ h.text }}</li>{% endfor %}
+  </ol>
+</section>
+{% endblock %}

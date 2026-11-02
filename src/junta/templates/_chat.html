@@ -1,0 +1,57 @@
+<section class="card" id="chat">
+  <div class="chat-head">
+    <h2>Group chat</h2>
+    <span class="muted small">Organizer bot · {{ 'AI on' if ai_on else 'rules mode' }}</span>
+  </div>
+
+  <div class="chat">
+    {% for msg in messages %}
+      {% if msg.member_id is none %}
+        <div class="bubble bot">
+          <span class="who">Junta organizer <span class="src">{{ msg.source }}</span></span>
+          {{ msg.text }}
+        </div>
+      {% else %}
+        <div class="bubble {{ 'me' if me is defined and me and msg.member_id == me.id else 'them' }}">
+          <span class="who">{{ msg.name }}</span>
+          {{ msg.text }}
+        </div>
+      {% endif %}
+    {% else %}
+      <p class="muted small">No messages yet. Try: “I can receive later” or “I have an emergency and need the money”.</p>
+    {% endfor %}
+  </div>
+
+  {% if proposal %}
+  <div class="proposal">
+    <strong>Fair turn swap proposed</strong>
+    <ul>
+      {% for r in proposal.rows %}
+      <li>{{ r.name }}: turn {{ r.old }} → {{ r.new }}
+        {% if r.voted %}<span class="pill ok">agreed</span>{% else %}<span class="pill wait">waiting</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    <p class="muted small">Computed by Junta's fair-swap algorithm. Nobody who didn't ask is moved,
+      and nothing changes until everyone affected agrees.</p>
+    {% if proposal.can_vote and not proposal.has_voted %}
+    <div class="row">
+      <form method="post" action="{{ url_for('vote', proposal_id=proposal.id) }}">
+        <input type="hidden" name="member_id" value="{{ me.id }}"><input type="hidden" name="accept" value="1">
+        <button>Accept</button>
+      </form>
+      <form method="post" action="{{ url_for('vote', proposal_id=proposal.id) }}">
+        <input type="hidden" name="member_id" value="{{ me.id }}"><input type="hidden" name="accept" value="0">
+        <button class="ghost">Reject</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if me is defined and me %}
+  <form method="post" action="{{ url_for('say', member_id=me.id) }}" class="row composer">
+    <input name="text" placeholder="Write to the group…" autocomplete="off" required maxlength="1000">
+    <button>Send</button>
+  </form>
+  {% endif %}
+</section>
