@@ -3,7 +3,7 @@ import hmac
 import json
 from pathlib import Path
 
-from flask import Flask, abort, flash, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for
 
 from . import chat, core, swaps
 from .ai import AIClient
@@ -16,9 +16,10 @@ ENV = load_env(ROOT / ".env")
 
 app = Flask(__name__)
 app.secret_key = ENV["FLASK_SECRET_KEY"]
+app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024  # voice notes are capped at ~3 MB in chat.handle_voice
 app.jinja_env.filters["money"] = to_str
 pp = PayPal.from_env(ROOT / ".env")
-ai = AIClient.from_env(ENV)  # None -> the organizer works with keyword rules
+ai = AIClient.from_env(ENV, interactive=True)  # None -> the organizer works with keyword rules
 
 EVENT_TEXT = {
     "swap_proposed": "Fair turn swap proposed: {description}",
@@ -115,6 +116,22 @@ def say(member_id):
         abort(404)
     chat.handle_message(conn, ai, member_id, request.form.get("text", ""))
     return redirect(url_for("member", member_id=member_id) + "#chat")
+
+
+@app.post("/m/<int:member_id>/voice")
+def voice(member_id):
+    """Receives a recorded voice note (multipart field "audio"), transcribes it and posts it to the chat."""
+    conn = db()
+    if conn.execute("SELECT 1 FROM members WHERE id = ?", (member_id,)).fetchone() is None:
+        abort(404)
+    upload = request.files.get("audio")
+    try:
+        if upload is None:
+            raise ValueError("No audio received.")
+        chat.handle_voice(conn, ai, member_id, upload.read(), upload.mimetype)
+        return jsonify(ok=True)
+    except ValueError as err:
+        return jsonify(ok=False, error=str(err)), 400
 
 
 @app.post("/proposal/<int:proposal_id>/vote")

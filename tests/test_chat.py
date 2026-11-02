@@ -138,5 +138,64 @@ class SwapFlowTest(unittest.TestCase):
         self.assertEqual([m["name"] for m in msgs], ["Rosa", None])
 
 
+class FakeVoiceAI(FakeAI):
+    def __init__(self, transcript, *outputs):
+        super().__init__(*outputs)
+        self.transcript, self.transcribed = transcript, 0
+
+    def transcribe(self, audio, filename, content_type, model="whisper-large-v3-turbo"):
+        self.transcribed += 1
+        return self.transcript
+
+
+class VoiceTest(unittest.TestCase):
+    def setUp(self):
+        self.conn = connect(":memory:")
+        core.create_group(self.conn, "Junta", 500, ORG, PEOPLE)
+        self.luis = self.conn.execute("SELECT id FROM members WHERE name = 'Luis'").fetchone()[0]
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_voice_note_is_transcribed_and_understood(self):
+        ai = FakeVoiceAI("mi hijo está internado, necesito la plata")
+        out = chat.handle_voice(self.conn, ai, self.luis, b"fake-audio", "audio/webm;codecs=opus")
+        self.assertEqual((out["intent"], out["kind"]), ("needs_pot_early", "voice"))
+        row = self.conn.execute("SELECT kind, text FROM messages WHERE member_id = ?", (self.luis,)).fetchone()
+        self.assertEqual(row["kind"], "voice")
+        self.assertIn("internado", row["text"])
+
+    def test_voice_needs_ai(self):
+        with self.assertRaises(ValueError):
+            chat.handle_voice(self.conn, None, self.luis, b"x", "audio/webm")
+
+    def test_rejects_unexpected_files_and_long_audio(self):
+        ai = FakeVoiceAI("hola")
+        with self.assertRaises(ValueError):
+            chat.handle_voice(self.conn, ai, self.luis, b"x", "application/pdf")
+        with self.assertRaises(ValueError):
+            chat.handle_voice(self.conn, ai, self.luis, b"x" * (chat.MAX_VOICE_BYTES + 1), "audio/webm")
+        self.assertEqual(ai.transcribed, 0)          # nothing was sent to the AI
+
+    def test_unintelligible_audio_is_reported(self):
+        with self.assertRaises(ValueError):
+            chat.handle_voice(self.conn, FakeVoiceAI(None), self.luis, b"x", "audio/wav")
+
+
+class MigrationTest(unittest.TestCase):
+    def test_old_database_gets_the_kind_column(self):
+        import sqlite3
+        import tempfile
+        path = Path(tempfile.mkdtemp()) / "old.db"
+        old = sqlite3.connect(path)
+        old.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, group_id INTEGER, member_id INTEGER, "
+                    "text TEXT NOT NULL, intent TEXT, source TEXT, at TEXT)")
+        old.commit()
+        old.close()
+        conn = connect(path)
+        self.assertIn("kind", {r["name"] for r in conn.execute("PRAGMA table_info(messages)")})
+        conn.close()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

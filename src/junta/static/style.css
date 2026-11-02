@@ -70,3 +70,4 @@ button.paypal { background: var(--paypal); color: var(--paypal-ink); width: 100%
 .proposal ul { margin: 6px 0; padding-left: 18px; }
 .composer { margin-top: 10px; }
 .composer input { flex: 1; }
+button.recording { background: var(--due); color: #fff; border-color: var(--due); }

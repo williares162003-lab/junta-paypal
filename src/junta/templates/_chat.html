@@ -13,7 +13,7 @@
         </div>
       {% else %}
         <div class="bubble {{ 'me' if me is defined and me and msg.member_id == me.id else 'them' }}">
-          <span class="who">{{ msg.name }}</span>
+          <span class="who">{{ msg.name }}{% if msg.kind == 'voice' %} <span class="src">🎤 voice note, transcribed</span>{% endif %}</span>
           {{ msg.text }}
         </div>
       {% endif %}
@@ -52,6 +52,60 @@
   <form method="post" action="{{ url_for('say', member_id=me.id) }}" class="row composer">
     <input name="text" placeholder="Write to the group…" autocomplete="off" required maxlength="1000">
     <button>Send</button>
+    {% if ai_on %}<button type="button" id="mic" class="ghost" hidden title="Record a voice note">🎤</button>{% endif %}
   </form>
+  <p id="voice-status" class="muted small" hidden></p>
+  {% if ai_on %}
+  <script>
+  (function () {
+    const mic = document.getElementById("mic"), status = document.getElementById("voice-status");
+    if (!mic || !navigator.mediaDevices || !window.MediaRecorder) return;
+    mic.hidden = false;
+    let recorder = null, chunks = [], timer = null, seconds = 0;
+    const say = (text) => { status.hidden = !text; status.textContent = text || ""; };
+
+    async function start() {
+      let stream;
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+      catch (e) { say("Microphone not available. You can still write your message."); return; }
+      chunks = []; seconds = 0;
+      recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+      recorder.onstop = () => { stream.getTracks().forEach((t) => t.stop()); upload(); };
+      recorder.start();
+      mic.textContent = "■ 0:00"; mic.classList.add("recording");
+      timer = setInterval(() => {
+        seconds += 1;
+        mic.textContent = "■ 0:" + String(seconds).padStart(2, "0");
+        if (seconds >= 60) stop();
+      }, 1000);
+      say("Recording… press ■ to send (max 60 s).");
+    }
+
+    function stop() {
+      clearInterval(timer);
+      mic.textContent = "🎤"; mic.classList.remove("recording");
+      if (recorder && recorder.state !== "inactive") recorder.stop();
+    }
+
+    async function upload() {
+      const type = (recorder && recorder.mimeType) || "audio/webm";
+      const form = new FormData();
+      form.append("audio", new Blob(chunks, { type }), "voice-note");
+      mic.disabled = true; say("Transcribing your voice note…");
+      try {
+        const res = await fetch("{{ url_for('voice', member_id=me.id) }}", { method: "POST", body: form });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Upload failed");
+        location.hash = "chat"; location.reload();
+      } catch (e) {
+        say(e.message); mic.disabled = false;
+      }
+    }
+
+    mic.addEventListener("click", () => (recorder && recorder.state === "recording") ? stop() : start());
+  })();
+  </script>
+  {% endif %}
   {% endif %}
 </section>

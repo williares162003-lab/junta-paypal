@@ -5,9 +5,9 @@ from . import core, organizer, swaps
 from .money import to_str
 
 
-def _post(conn, group_id, member_id, text, intent=None, source=None):
-    conn.execute("INSERT INTO messages (group_id, member_id, text, intent, source) VALUES (?, ?, ?, ?, ?)",
-                 (group_id, member_id, text, intent, source))
+def _post(conn, group_id, member_id, text, intent=None, source=None, kind="text"):
+    conn.execute("INSERT INTO messages (group_id, member_id, text, kind, intent, source) VALUES (?, ?, ?, ?, ?, ?)",
+                 (group_id, member_id, text, kind, intent, source))
 
 
 def _facts(conn, member):
@@ -22,8 +22,11 @@ def _facts(conn, member):
             "member_paid_this_round": mine["status"] == "CAPTURED" if mine else False}
 
 
-def handle_message(conn, ai, member_id, text):
-    """Store the member's message, understand it, act on preferences, and post the bot's reply."""
+def handle_message(conn, ai, member_id, text, kind="text"):
+    """Store the member's message, understand it, act on preferences, and post the bot's reply.
+
+    kind="voice" means `text` is the Whisper transcript of a voice note (the audio itself is not stored).
+    """
     text = text.strip()[:1000]
     if not text:
         return None
@@ -31,7 +34,7 @@ def handle_message(conn, ai, member_id, text):
     group_id = member["group_id"]
     result, source = organizer.classify(ai, text)
     intent = result["intent"]
-    _post(conn, group_id, member_id, text, intent, source)
+    _post(conn, group_id, member_id, text, intent, source, kind)
 
     facts = _facts(conn, member)
     name = member["name"]
@@ -74,7 +77,27 @@ def handle_message(conn, ai, member_id, text):
 
     reply, reply_source = organizer.compose_reply(ai, text, facts, template)
     _post(conn, group_id, None, reply, intent, reply_source)
-    return {"intent": intent, "understood_by": source, "reply": reply, "reply_by": reply_source}
+    return {"intent": intent, "understood_by": source, "reply": reply, "reply_by": reply_source, "kind": kind}
+
+
+MAX_VOICE_BYTES = 3 * 1024 * 1024   # about 60 seconds of compressed audio
+VOICE_TYPES = ("audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-wav", "audio/m4a")
+
+
+def handle_voice(conn, ai, member_id, audio, content_type):
+    """Transcribe a voice note with Whisper and handle it like a text message. The audio is not stored."""
+    if ai is None:
+        raise ValueError("Voice notes need an AI API key.")
+    base_type = (content_type or "").split(";")[0].strip().lower()
+    if base_type not in VOICE_TYPES:
+        raise ValueError("Unsupported audio format.")
+    if not audio or len(audio) > MAX_VOICE_BYTES:
+        raise ValueError("Voice notes can be up to about 60 seconds.")
+    extension = base_type.split("/")[1].replace("x-", "").replace("mpeg", "mp3")
+    transcript = ai.transcribe(audio, f"voice.{extension}", base_type)
+    if not transcript:
+        raise ValueError("Could not understand the voice note. Please try again or write it.")
+    return handle_message(conn, ai, member_id, transcript, kind="voice")
 
 
 def recent_messages(conn, group_id, limit=40):

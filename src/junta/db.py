@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS messages (
     group_id   INTEGER NOT NULL REFERENCES groups(id),
     member_id  INTEGER REFERENCES members(id),
     text       TEXT NOT NULL,
+    kind       TEXT NOT NULL DEFAULT 'text' CHECK (kind IN ('text', 'voice')),  -- voice = Whisper transcript
     intent     TEXT,
     source     TEXT,
     at         TEXT NOT NULL DEFAULT (datetime('now'))
@@ -118,7 +119,15 @@ def connect(path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn):
+    """Add columns introduced after a database was created (CREATE TABLE IF NOT EXISTS does not add them)."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(messages)")}
+    if "kind" not in columns:
+        conn.execute("ALTER TABLE messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'")
 
 
 def log_event(conn, group_id, kind, **detail):
