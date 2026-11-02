@@ -1,6 +1,7 @@
 """Junta web app (Flask). Run: .venv/Scripts/python -m junta.app  (from src/) or scripts/run_app.py"""
 import hmac
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for
@@ -45,6 +46,12 @@ def current_round_id(conn, group_id):
     return row["id"] if row else None
 
 
+def local_time(utc_text):
+    """SQLite stores UTC ('YYYY-MM-DD HH:MM:SS'). Show it in the computer's local time."""
+    moment = datetime.strptime(utc_text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    return moment.astimezone().strftime("%Y-%m-%d %H:%M")
+
+
 def history(conn, group_id, limit=12):
     items = []
     for e in conn.execute("SELECT * FROM events WHERE group_id = ? ORDER BY id DESC LIMIT ?", (group_id, limit)):
@@ -54,7 +61,7 @@ def history(conn, group_id, limit=12):
             text = template.format(**detail)
         except KeyError:
             text = e["kind"]
-        items.append({"at": e["at"], "text": text})
+        items.append({"at": local_time(e["at"]), "text": text})
     return items
 
 

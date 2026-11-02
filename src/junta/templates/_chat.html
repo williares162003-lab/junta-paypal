@@ -4,7 +4,7 @@
     <span class="muted small">Organizer bot · {{ 'AI on' if ai_on else 'rules mode' }}</span>
   </div>
 
-  <div class="chat">
+  <div class="chat" id="chat-log">
     {% for msg in messages %}
       {% if msg.member_id is none %}
         <div class="bubble bot">
@@ -21,6 +21,7 @@
       <p class="muted small">No messages yet. Try: “I can receive later” or “I have an emergency and need the money”.</p>
     {% endfor %}
   </div>
+  <script>(function () { const log = document.getElementById("chat-log"); log.scrollTop = log.scrollHeight; })();</script>
 
   {% if proposal %}
   <div class="proposal">
