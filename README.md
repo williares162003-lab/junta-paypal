@@ -147,7 +147,7 @@ python -m unittest discover -s tests -v
 
 46 tests, standard library only (no network). They cover the money rules (exact amounts, unapproved, tampered or expired orders, one payout per round, retries after a network failure, a full junta rotating to the end), the fair-swap algorithm against brute force, the organizer (rules, validation of AI output, invented numbers, manipulation), swaps and votes, voice notes, and the AI client's rate-limit handling.
 
-### Evaluation
+### Re-running the evaluation
 
 ```bash
 python scripts/evaluate_organizer.py   # about 30 minutes on the free tier; uses a large part of the daily token quota
